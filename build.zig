@@ -3,8 +3,14 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const exe_name = b.option(
+        []const u8,
+        "exe_name",
+        "Name of the executable",
+    ) orelse "ejson_runner";
+
     const exe = b.addExecutable(.{
-        .name = "ejson_runner",
+        .name = exe_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
