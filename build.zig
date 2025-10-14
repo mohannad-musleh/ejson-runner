@@ -12,6 +12,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const build_zig_zon = b.createModule(.{
+        .root_source_file = b.path("build.zig.zon"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("build.zig.zon", build_zig_zon);
+
+    const yazap = b.dependency("yazap", .{});
+    exe.root_module.addImport("yazap", yazap.module("yazap"));
+
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");
