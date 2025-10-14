@@ -36,14 +36,13 @@ jobs:
       - name: Generate Checksums
         run: |
           cd ./zig-out/bin
-          sha256sum ejson_runner_windows_x64.exe ejson_runner_linux_x64 ejson_runner_linux_aarch64 ejson_runner_macos_arm64 > checksums.txt
+          sha256sum ejson_runner_linux_x64 ejson_runner_linux_aarch64 ejson_runner_macos_arm64 > checksums.txt
 
       - name: Release
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
           files: |
-            ./zig-out/bin/ejson_runner_windows_x64.exe
             ./zig-out/bin/ejson_runner_linux_x64
             ./zig-out/bin/ejson_runner_linux_aarch64
             ./zig-out/bin/ejson_runner_macos_arm64
