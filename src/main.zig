@@ -1,15 +1,98 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const build_zig_zon = @import("build.zig.zon");
-const yazap = @import("yazap");
+const argsParser = @import("args");
 const env = @import("./env.zig");
-
-const App = yazap.App;
-const Arg = yazap.Arg;
 
 const project_name = @tagName(build_zig_zon.name);
 const version = build_zig_zon.version;
 const description = build_zig_zon.description;
+
+const Options = struct {
+    @"ejson-file": ?[]const u8 = null,
+    @"ejson-keys-dir": ?[]const u8 = null,
+    @"ejson-exe": []const u8 = "ejson",
+    @"include-paths": ?[]const u8 = null,
+    @"exclude-shell-vars": bool = false,
+    help: bool = false,
+    version: bool = false,
+
+    pub const shorthands = .{
+        .h = "help",
+        .v = "version",
+        .f = "ejson-file",
+        .k = "ejson-keys-dir",
+        .e = "ejson-exe",
+        .p = "include-paths",
+        .E = "exclude-shell-vars",
+    };
+
+    pub const meta = .{
+        .usage_summary = "[OPTIONS] <command>",
+        .full_text = description ++ "\n\nNOTE: If you want to run a command that has a similar options/flags as the " ++ project_name ++ ", add \"--\" before the command.",
+        .option_docs = .{
+            .@"ejson-file" = "Ejson secrets file [REQUIRED]",
+            .@"ejson-keys-dir" = "The path to the directory that contains the ejson's private keys.",
+            .@"ejson-exe" = "Specify the path of \"ejson\" executable (default: \"ejson\", and expected to be available in PATH).",
+            .@"include-paths" = "A comma-seperated list of json paths to be included (if not specified, all will be included).",
+            .@"exclude-shell-vars" = "Exclude all environment variables provided by the current shell",
+            .help = "Print this help and exit",
+            .version = "Display the version of " ++ project_name,
+        },
+    };
+};
+
+pub fn _main() u8 {
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
+    const parsed_args = argsParser.parseForCurrentProcess(Options, arena, .print) catch return 1;
+    const options = parsed_args.options;
+    const positionals = parsed_args.positionals;
+    defer parsed_args.deinit();
+
+    if (options.help) {
+        argsParser.printHelp(
+            Options,
+            parsed_args.executable_name orelse project_name,
+            stdout,
+        ) catch return 1;
+        stdout.flush() catch return 1;
+        return 0;
+    }
+
+    std.debug.print("{s}:\n\n", .{parsed_args.executable_name orelse project_name});
+    std.debug.print("{s}\n\n", .{description});
+    std.debug.print("Options:\n", .{});
+    if (options.@"ejson-file") |f| {
+        std.debug.print("\t ejson-file: {s}\n", .{f});
+    }
+
+    if (options.@"ejson-keys-dir") |k| {
+        std.debug.print("\t ejson-keys-dir: {s}\n", .{k});
+    }
+
+    std.debug.print("\t ejson-exe: {s}\n", .{options.@"ejson-exe"});
+
+    if (options.@"include-paths") |p| {
+        std.debug.print("\t include-paths: {s}\n", .{p});
+    }
+
+    std.debug.print("\t exclude-shell-vars: {}\n", .{options.@"exclude-shell-vars"});
+
+    std.debug.print("\nArguments: ", .{});
+    for (positionals) |item| {
+        std.debug.print("{s} ", .{item});
+    }
+    std.debug.print("\n", .{});
+
+    return 0;
+}
 
 pub fn main() u8 {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -20,48 +103,40 @@ pub fn main() u8 {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var app = App.init(arena, project_name, description);
-    defer app.deinit();
+    const parsed_args = argsParser.parseForCurrentProcess(Options, arena, .print) catch return 1;
+    const options = parsed_args.options;
+    const positionals = parsed_args.positionals;
+    defer parsed_args.deinit();
 
-    var ejson_runner = app.rootCommand();
-    ejson_runner.addArgs(&[_]Arg{
-        Arg.multiValuesPositional("COMMAND", "The command to be executed.", null),
-        Arg.singleValueOption("ejson-file", 'f', "Ejson secrets file [REQUIRED]"),
-        Arg.singleValueOption("ejson-keys-dir", 'k', "The path to the directory that contains the ejson's private keys."),
-        Arg.singleValueOption("ejson-exe", 'e', "Specify the path of \"ejson\" executable (default: \"ejson\", and expected to be available in PATH)"),
-        Arg.singleValueOption("include-paths", 'p', "A comma-seperated list of json paths to be included (if not specified, all will be included)."),
-        Arg.booleanOption("exclude-shell-vars", 'E', "Exclude all environment variables provided by the current shell"),
-        Arg.booleanOption("version", 'v', "Display the version of " ++ project_name),
-    }) catch {
-        std.debug.print("OOM\n", .{});
-        return 1;
-    };
+    if (options.help) {
+        argsParser.printHelp(
+            Options,
+            parsed_args.executable_name orelse project_name,
+            stdout,
+        ) catch return 1;
+        stdout.flush() catch return 1;
+        return 0;
+    }
 
-    const parsed_args = app.parseProcess() catch |err| {
-        std.debug.print("ERROR: Failed to parse command arguments: {s}\n", .{@errorName(err)});
-        return 1;
-    };
-
-    if (parsed_args.containsArg("version")) {
+    if (options.version) {
         stdout.print("{s}\n", .{version}) catch return 1;
         stdout.flush() catch return 1;
 
         return 0;
     }
 
-    const ejson_file = parsed_args.getSingleValue("ejson-file") orelse {
-        app.displayHelp() catch {};
+    const ejson_file = options.@"ejson-file" orelse {
         std.debug.print("ERROR: --ejson-file is required\n", .{});
         return 1;
     };
 
-    const ejson_keys_dir = parsed_args.getSingleValue("ejson-keys-dir");
+    const ejson_keys_dir = options.@"ejson-keys-dir";
     if (ejson_keys_dir != null and ejson_keys_dir.?.len < 1) {
         std.debug.print("ERROR: --ejson-keys-dir value must not be empty", .{});
         return 1;
     }
 
-    const ejson_exe = parsed_args.getSingleValue("ejson-exe") orelse "ejson";
+    const ejson_exe = options.@"ejson-exe";
     if (ejson_exe.len < 1) {
         std.debug.print("ERROR: --ejson-exe value must not be empty", .{});
         return 1;
@@ -72,28 +147,24 @@ pub fn main() u8 {
         return 1;
     };
 
-    const cmd = parsed_args.getMultiValues("COMMAND") orelse {
-        std.debug.print("Please specify the command to be executed\n", .{});
-        return 1;
-    };
-    if (cmd.len < 1) {
+    if (positionals.len < 1) {
         std.debug.print("Please specify the command to be executed\n", .{});
         return 1;
     }
 
-    var cmd_args = std.ArrayList([]const u8).initCapacity(arena, cmd.len) catch {
+    var cmd_args = std.ArrayList([:0]const u8).initCapacity(arena, positionals.len) catch {
         std.debug.print("OOM\n", .{});
         return 1;
     };
 
-    for (cmd) |cmd_part| cmd_args.append(arena, cmd_part) catch {
+    for (positionals) |cmd_part| cmd_args.append(arena, cmd_part) catch {
         std.debug.print("OOM\n", .{});
         return 1;
     };
 
     var config = env.SetSecretsEnvsConfig{};
     var paths_list: ?std.ArrayList([]const u8) = null;
-    if (parsed_args.getSingleValue("include-paths")) |paths_str| {
+    if (options.@"include-paths") |paths_str| {
         var it = std.mem.splitSequence(u8, paths_str, ",");
         paths_list = std.ArrayList([]const u8).initCapacity(arena, 5) catch {
             std.debug.print("OOM\n", .{});
@@ -114,7 +185,7 @@ pub fn main() u8 {
     }
 
     var cmd_env = blk: {
-        var cmd_env_temp = if (parsed_args.containsArg("exclude-shell-vars"))
+        var cmd_env_temp = if (options.@"exclude-shell-vars")
             std.process.EnvMap.init(arena)
         else
             std.process.getEnvMap(arena) catch |err| {

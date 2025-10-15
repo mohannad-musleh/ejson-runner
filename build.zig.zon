@@ -5,9 +5,9 @@
     .fingerprint = 0xbfee626fca78f4ed, // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.1",
     .dependencies = .{
-        .yazap = .{
-            .url = "git+https://github.com/prajwalch/yazap#5aad02aed585bd791c2592e1979417428a055ec4",
-            .hash = "yazap-0.6.3-Z1t-EmrzAQA-8vFR-JGpI7vCSpHv5_6z6PAIDq2X4PoH",
+        .args = .{
+            .url = "git+https://github.com/ikskuh/zig-args#8ae26b44a884ff20dca98ee84c098e8f8e94902f",
+            .hash = "args-0.0.0-CiLiqojRAACGzDRO7A9dw7kWSchNk29caJZkXuMCb0Cn",
         },
     },
     .paths = .{
