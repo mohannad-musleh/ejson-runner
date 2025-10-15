@@ -42,58 +42,6 @@ const Options = struct {
     };
 };
 
-pub fn _main() u8 {
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
-
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
-
-    const parsed_args = argsParser.parseForCurrentProcess(Options, arena, .print) catch return 1;
-    const options = parsed_args.options;
-    const positionals = parsed_args.positionals;
-    defer parsed_args.deinit();
-
-    if (options.help) {
-        argsParser.printHelp(
-            Options,
-            parsed_args.executable_name orelse project_name,
-            stdout,
-        ) catch return 1;
-        stdout.flush() catch return 1;
-        return 0;
-    }
-
-    std.debug.print("{s}:\n\n", .{parsed_args.executable_name orelse project_name});
-    std.debug.print("{s}\n\n", .{description});
-    std.debug.print("Options:\n", .{});
-    if (options.@"ejson-file") |f| {
-        std.debug.print("\t ejson-file: {s}\n", .{f});
-    }
-
-    if (options.@"ejson-keys-dir") |k| {
-        std.debug.print("\t ejson-keys-dir: {s}\n", .{k});
-    }
-
-    std.debug.print("\t ejson-exe: {s}\n", .{options.@"ejson-exe"});
-
-    if (options.@"include-paths") |p| {
-        std.debug.print("\t include-paths: {s}\n", .{p});
-    }
-
-    std.debug.print("\t exclude-shell-vars: {}\n", .{options.@"exclude-shell-vars"});
-
-    std.debug.print("\nArguments: ", .{});
-    for (positionals) |item| {
-        std.debug.print("{s} ", .{item});
-    }
-    std.debug.print("\n", .{});
-
-    return 0;
-}
-
 pub fn main() u8 {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
